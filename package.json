@@ -1,0 +1,17 @@
+
+{
+  "name": "codius-puzzle-contract",
+  "version": "0.1.0",
+  "description": "Codius contract triggered by text messages",
+  "main": "contract.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/codius/codius-puzzle-contract.git"
+  },
+  "dependencies": {
+    "body-parser": "^1.9.0",
+    "express": "^4.9.6",
+    "twilio": ">=1.8.0",
+    "ripple-lib": ">=0.9.2"
+  }
+}
