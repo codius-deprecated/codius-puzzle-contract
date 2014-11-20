@@ -42,16 +42,12 @@ app.use(bodyParser.urlencoded());
 var twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 var RIPPLE_NAME_REGEX = /^~\w[\w.-]+\w$/;
-var MAGIC_WORD_REGEX = '/' + process.env.MAGIC_WORD + '/i';
+var MAGIC_WORD_REGEX = new RegExp(process.env.MAGIC_WORD, 'i');
 var rewardPaid = false;
 var winner = null;
 
 // Send XRP to recipient.
 function sendReward(recipient) {
-  if (typeof usd_to_send !== 'string') {
-    usd_to_send = usd_to_send.toString();
-  }
-
   var amount = process.env.XRP_REWARD;
   if (typeof amount === 'string') {
     amount = parseFloat(amount);
@@ -78,7 +74,12 @@ app.post('/sms', function(req, res) {
 
   //TODO: Verify that this message is from Twilio
 
+
   var incomingMessage = req.body;
+
+  if (!incomingMessage.From || !incomingMessage.Body) {
+    sendTwilioResponse(res, 'Too many secrets');
+  }
   console.log(incomingMessage.From + ' got message: "' + incomingMessage.Body + '" from: ' + incomingMessage.From );
 
   if (winner!==null && winner===incomingMessage.From) {
@@ -93,18 +94,19 @@ app.post('/sms', function(req, res) {
       return;
     }
     nameToReward = matchedRippleNames[0].slice(1); //remove the '~'
-    https.get('https://id.ripple.com/v1/user/'+nameToReward, function(res) {
-      console.log("statusCode: ", res.statusCode);
-      console.log("headers: ", res.headers);
+    https.get('https://id.ripple.com/v1/user/'+nameToReward, function(result) {
+      console.log("statusCode: ", result.statusCode);
+      console.log("headers: ", result.headers);
 
-      res.on('data', function(d) {
-        console.log(d);
-        if (d.address) {
+      result.on('data', function(d) {
+        accountInfo = JSON.parse(d.toString('utf8'));
+        if (accountInfo.exists && accountInfo.address) {
           if (rewardPaid) {
             sendTwilioResponse(res, 'Check your Ripple account.');
           } else {
             rewardPaid = true;
-            sendReward(d.address);
+            sendReward(accountInfo.address);
+            sendTwilioResponse(res, 'Thanks. Check your Ripple account for your reward.');
           }
         } else {
           sendTwilioResponse(res, 'That Ripple name does not exist!');
@@ -114,15 +116,15 @@ app.post('/sms', function(req, res) {
       console.error(e);
     });
   } else {
-    if (-1===incomingMessage.Body.search(process.env.MAGIC_WORD)) {
-      sendTwilioResponse(res, 'Too many secrets');
-      return;
-    } 
-    if (winner===null) {
-      winner = incomingMessage.From;
-      sendTwilioResponse(res, 'Congratulations! You solved the puzzle. Send your Ripple Name with the "~" in front to receive your reward.');
+    if (MAGIC_WORD_REGEX.test(incomingMessage.Body)) {
+      if (winner===null) {
+        winner = incomingMessage.From;
+        sendTwilioResponse(res, 'Congratulations! You solved the puzzle. Send your Ripple Name with the "~" in front to receive your reward.');
+      } else {
+        sendTwilioResponse(res, 'Congratulations! You solved the puzzle. Unfortunately someone else beat you to it. Thanks for playing!');
+      }
     } else {
-      sendTwilioResponse(res, 'Congratulations! You solved the puzzle. Unfortunately someone else beat you to it. Thanks for playing!');
+      sendTwilioResponse(res, 'Too many secrets');    
     }
   }
 });
